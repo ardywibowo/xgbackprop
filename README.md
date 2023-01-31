@@ -1,4 +1,4 @@
-# xgbackprop
+# XGBackprop
 PyTorch implementation of backpropagating through decision trees
 
 ## Overview
