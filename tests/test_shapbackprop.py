@@ -5,7 +5,6 @@ import sys
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from numpy import loadtxt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from xgbackprop.SHAPBackpropLayer import SHAPBackpropLayer
