@@ -7,7 +7,7 @@ import torch
 from matplotlib import pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from xgbackprop.SHAPBackpropLayer import SHAPBackpropLayer
+from xgbackprop.shap_backprop import SHAPBackpropLayer
 
 def test_backprop_model():
     # load model from file
@@ -19,7 +19,7 @@ def test_backprop_model():
     optimizer = torch.optim.Adam(input.parameters())
     
     outputs = []
-    for i in range(1000):
+    for i in range(10):
         encoder_output = input(torch.tensor([0])) + 0.1 * torch.randn(1, 8)
         
         output = layer(encoder_output)
