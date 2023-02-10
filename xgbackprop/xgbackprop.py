@@ -29,7 +29,8 @@ class Leaf(nn.Module):
         super().__init__()
         
         self.node_id = node_id
-        self.register_buffer("gain", torch.Tensor([gain]))
+        # self.register_buffer("gain", torch.Tensor([gain]))
+        self.gain = torch.nn.Parameter(torch.Tensor([gain]))
         
         # statistic
         self.base_weight = base_weight
@@ -37,7 +38,7 @@ class Leaf(nn.Module):
 
     # @torch.jit.script
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return self.gain
+        return self.gain * torch.ones_like(input[:, 0])
 
 class Node(nn.Module):
     def __init__(
@@ -60,7 +61,8 @@ class Node(nn.Module):
         self.right: Node = None
         
         self.register_buffer("split_idx", torch.LongTensor([split_idx]))
-        self.register_buffer("split_cond", torch.Tensor([split_cond]))
+        # self.register_buffer("split_cond", torch.Tensor([split_cond]))
+        self.split_cond = torch.nn.Parameter(torch.Tensor([split_cond]))
         self.register_buffer("gain", torch.Tensor([gain]))
         
         self.default_left = default_left
@@ -74,13 +76,11 @@ class Node(nn.Module):
     # @torch.jit.script
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         condition = input[:, self.split_idx].flatten() - self.split_cond
-        condition = torch.cat([condition[:, None], torch.zeros_like(condition[:, None])], -1)
-        weight = F.gumbel_softmax(condition, hard=False)[:, 0]
-        
-        # if self.training:
-        #     weight = F.gumbel_softmax(condition, hard=False)[:, 0]
-        # else:
-        #     weight = F.gumbel_softmax(condition, hard=True)[:, 0]
+        if self.training:
+            condition = torch.cat([condition[:, None], torch.zeros_like(condition[:, None])], -1)
+            weight = F.gumbel_softmax(condition, hard=False)[:, 0]            
+        else:
+            weight = torch.heaviside(condition, torch.Tensor([0]))
             
         # left is yes, right is no
         out = (1.0 - weight) * self.left(input) + weight * self.right(input)
@@ -101,7 +101,9 @@ class XGBackpropLayer(nn.Module):
         self.learner_model_shape: ParamT = model["learner"]["learner_model_param"]
         self.num_output_group = int(self.learner_model_shape["num_class"])
         self.num_feature = int(self.learner_model_shape["num_feature"])
-        self.base_score = float(self.learner_model_shape["base_score"])
+        
+        self.register_buffer("base_score", torch.Tensor([float(self.learner_model_shape["base_score"])]))
+        # self.base_score = float(self.learner_model_shape["base_score"])
         
         # A field encoding which output group a tree belongs
         self.tree_info = model["learner"]["gradient_booster"]["model"]["tree_info"]
@@ -197,7 +199,7 @@ class XGBackpropLayer(nn.Module):
                 root = Leaf(
                     node_id = node_id,
                     base_weight = base_weights[node_id],
-                    gain = gain[node_id],
+                    gain = split_conditions[node_id],
                     cover = cover[node_id]
                 )
             
@@ -225,7 +227,7 @@ class XGBackpropLayer(nn.Module):
                         left_node = Leaf(
                             node_id = n_id,
                             base_weight = base_weights[n_id],
-                            gain = gain[n_id],
+                            gain = split_conditions[n_id],
                             cover = cover[n_id]
                         )
                         node.left = left_node
@@ -249,7 +251,7 @@ class XGBackpropLayer(nn.Module):
                         right_node = Leaf(
                             node_id = n_id,
                             base_weight = base_weights[n_id],
-                            gain = gain[n_id],
+                            gain = split_conditions[n_id],
                             cover = cover[n_id]
                         )
                         node.right = right_node
@@ -259,5 +261,5 @@ class XGBackpropLayer(nn.Module):
     # @torch.jit.script
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         preds = torch.stack([tree(input) for tree in self.trees], dim=-1)
-        out = torch.sum(preds, dim=-1)
+        out = torch.sum(preds, dim=-1) + self.base_score
         return out

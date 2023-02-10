@@ -33,12 +33,12 @@ def test_xgbackprop():
     model = XGBackpropLayer(model)
     # model = torch.jit.script(model)
     # model = torch.compile(model)
-    input = torch.nn.Embedding(1, 8)
+    input = torch.nn.Embedding(2, 8)
     optimizer = torch.optim.Adam(input.parameters())
     
     outputs = []
     for i in range(1000):
-        encoder_output = input(torch.tensor([0]))
+        encoder_output = input(torch.tensor([0, 1]))
         output = model(encoder_output)
         if (i // 100) % 2 == 0:
             print("Target: -10")
