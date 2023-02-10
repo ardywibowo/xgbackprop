@@ -24,13 +24,16 @@ class Leaf(nn.Module):
         node_id: int,
         base_weight: float,
         gain: float,
-        cover: float) -> None:
+        cover: float,
+        trainable: bool = True) -> None:
         
         super().__init__()
         
         self.node_id = node_id
-        # self.register_buffer("gain", torch.Tensor([gain]))
-        self.gain = torch.nn.Parameter(torch.Tensor([gain]))
+        if trainable:
+            self.gain = torch.nn.Parameter(torch.Tensor([gain]))
+        else:
+            self.register_buffer("gain", torch.Tensor([gain]))
         
         # statistic
         self.base_weight = base_weight
@@ -51,7 +54,8 @@ class Node(nn.Module):
         categories: List[int],
         base_weight: float,
         gain: float,
-        cover: float) -> None:
+        cover: float,
+        trainable: bool = True) -> None:
         
         super().__init__()
         
@@ -61,8 +65,11 @@ class Node(nn.Module):
         self.right: Node = None
         
         self.register_buffer("split_idx", torch.LongTensor([split_idx]))
-        # self.register_buffer("split_cond", torch.Tensor([split_cond]))
-        self.split_cond = torch.nn.Parameter(torch.Tensor([split_cond]))
+        
+        if self.trainable:
+            self.split_cond = torch.nn.Parameter(torch.Tensor([split_cond]))
+        else:
+            self.register_buffer("split_cond", torch.Tensor([split_cond]))
         self.register_buffer("gain", torch.Tensor([gain]))
         
         self.default_left = default_left
@@ -89,7 +96,7 @@ class Node(nn.Module):
 class XGBackpropLayer(nn.Module):
     """Gradient boosted tree model."""
 
-    def __init__(self, model: dict) -> None:
+    def __init__(self, model: dict, trainable: bool = True) -> None:
         """Construct the Model from a JSON object.
         parameters
         ----------
@@ -121,7 +128,7 @@ class XGBackpropLayer(nn.Module):
         # Right now XGBoost doesn't support vector leaf yet
         assert self.leaf_size == 0, str(self.leaf_size)
 
-        trees: List[Node] = []
+        trees = []
         for i in range(self.num_trees):
             tree: Dict[str, Any] = j_trees[i]
             tree_id = int(tree["id"])
@@ -193,14 +200,16 @@ class XGBackpropLayer(nn.Module):
                     categories = node_categories[node_id],
                     base_weight = base_weights[node_id],
                     gain = gain[node_id],
-                    cover = cover[node_id]
+                    cover = cover[node_id],
+                    trainable = trainable
                 )
             else:
                 root = Leaf(
                     node_id = node_id,
                     base_weight = base_weights[node_id],
                     gain = split_conditions[node_id],
-                    cover = cover[node_id]
+                    cover = cover[node_id],
+                    trainable = trainable
                 )
             
             frontier = [root]
@@ -219,7 +228,8 @@ class XGBackpropLayer(nn.Module):
                             categories = node_categories[n_id],
                             base_weight = base_weights[n_id],
                             gain = gain[n_id],
-                            cover = cover[n_id]
+                            cover = cover[n_id],
+                            trainable = trainable
                         )
                         node.left = left_node
                         frontier.append(left_node)
@@ -228,7 +238,8 @@ class XGBackpropLayer(nn.Module):
                             node_id = n_id,
                             base_weight = base_weights[n_id],
                             gain = split_conditions[n_id],
-                            cover = cover[n_id]
+                            cover = cover[n_id],
+                            trainable = trainable
                         )
                         node.left = left_node
                 if right_children[node_id] > -1:
@@ -243,7 +254,8 @@ class XGBackpropLayer(nn.Module):
                             categories = node_categories[n_id],
                             base_weight = base_weights[n_id],
                             gain = gain[n_id],
-                            cover = cover[n_id]
+                            cover = cover[n_id],
+                            trainable = trainable
                         )
                         node.right = right_node
                         frontier.append(right_node)
@@ -252,7 +264,8 @@ class XGBackpropLayer(nn.Module):
                             node_id = n_id,
                             base_weight = base_weights[n_id],
                             gain = split_conditions[n_id],
-                            cover = cover[n_id]
+                            cover = cover[n_id],
+                            trainable = trainable
                         )
                         node.right = right_node
             trees.append(root)
